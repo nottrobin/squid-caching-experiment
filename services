@@ -1,0 +1,81 @@
+comms-cache-frontend:
+    series: {{series}}
+    services:
+        snapcraft-io-fe:
+            charm: squid-reverseproxy
+            expose: True
+            num_units: 1
+{%- if stage_name == "production" %}
+            to: 4
+{%- endif %}
+            options:
+                extra_packages: "squid=3.5.12-1ubuntu7.2.5.ISPATCHED.16.04 squid-common=3.5.12-1ubuntu7.2.5.ISPATCHED.16.04"
+                refresh_patterns: include-file://{{ spec_dir }}/{{ stage }}/comms-cache-snapcraft-io-refresh.yaml
+                cache_dir: "/var/spool/squid"
+                port: 80
+                https_port: 443
+                enable_https: true
+                max_obj_size_kb: 32768
+                redirect_to_https: true
+                ssl_keyfile: /etc/squid/ssl/snapcraft.io.key
+                ssl_certfile: /etc/squid/ssl/snapcraft.io.crt
+                ssl_key: include-base64://{{ local_dir }}/snapcraft.io.key
+                ssl_cert: include-base64://{{ local_dir }}/snapcraft.io.crt
+                services: |-
+                      - service_name: k8s_snapcraft_io
+                        url: https://snapcraft.io
+                        proxy:
+                            proxy_target: 'https://prod-comms.kubernetes-ingress.canonical.com:443'
+                            match: /
+                        refresh:
+                            - path_regex: '.*'
+                              min: 10
+                              percent: 20
+                              max: 60
+        usn-ubuntu-com-fe:
+            charm: squid-reverseproxy
+            expose: True
+            num_units: 1
+{%- if stage_name == "production" %}
+            to: 5
+{%- endif %}
+            options:
+                extra_packages: "squid=3.5.12-1ubuntu7.2.5.ISPATCHED.16.04 squid-common=3.5.12-1ubuntu7.2.5.ISPATCHED.16.04"
+                refresh_patterns: include-file://{{ spec_dir }}/{{ stage }}/comms-cache-usn-ubuntu-com-refresh.yaml
+                cache_dir: "/var/spool/squid"
+                port: 80
+                https_port: 443
+                enable_https: true
+                max_obj_size_kb: 32768
+                redirect_to_https: true
+                ssl_keyfile: /etc/squid/ssl/usn.ubuntu.com.key
+                ssl_certfile: /etc/squid/ssl/usn.ubuntu.com.crt
+                ssl_key: include-base64://{{ local_dir }}/usn.ubuntu.com.key
+                ssl_cert: include-base64://{{ local_dir }}/usn.ubuntu.com.crt
+                services: |-
+                      - service_name: k8s_usn_ubuntu_com
+                        url: https://usn.ubuntu.com
+                        proxy:
+                            proxy_target: 'https://prod-comms.kubernetes-ingress.canonical.com:443'
+                            match: /
+                        refresh:
+                            - path_regex: '.*'
+                              min: 10
+                              percent: 20
+                              max: 60
+        nrpe:
+            charm: nrpe
+            options:
+                export_nagios_definitions: True
+                hostgroups: comms-cache-frontend
+                nagios_host_context: comms-cache-frontend-{{stage_name}}
+                nagios_master: wekufe.canonical.com
+                sub_postfix: ""
+                swap: -w 25% -c 10% -n OK
+        telegraf:
+            charm: telegraf
+    relations:
+        - ["snapcraft-io-fe:nrpe-external-master", "nrpe:nrpe-external-master"]
+        - ["usn-ubuntu-com-fe:nrpe-external-master", "nrpe:nrpe-external-master"]
+        - ["telegraf:juju-info", "snapcraft-io-fe"]
+        - ["telegraf:juju-info", "usn-ubuntu-com-fe"]

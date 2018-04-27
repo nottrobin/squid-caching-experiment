@@ -1,0 +1,6 @@
+.:
+  min: 360
+  percent: 50
+  max: 10080
+  options:
+    - ignore-auth
